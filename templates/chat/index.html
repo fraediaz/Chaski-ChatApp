@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chaski Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="min-h-screen bg-slate-100 text-slate-900">
+    <main class="mx-auto flex max-w-6xl flex-col gap-6 p-6 md:p-10">
+      <header class="rounded-2xl bg-white p-6 shadow-sm">
+        <h1 class="text-2xl font-bold">Chaski Chat</h1>
+        <p class="mt-2 text-sm text-slate-600">
+          Demo fullstack: API REST documentada + WebSocket en tiempo real.
+        </p>
+        <p class="mt-2 text-sm text-slate-600">
+          Docs API: <a class="font-medium text-blue-700 underline" href="/api/docs/">/api/docs/</a>
+        </p>
+      </header>
+
+      <section class="grid gap-6 md:grid-cols-3">
+        <article class="rounded-2xl bg-white p-4 shadow-sm md:col-span-1">
+          <h2 class="mb-3 text-lg font-semibold">Canales</h2>
+          <div class="mb-3 flex gap-2">
+            <input id="new-channel-name" class="w-full rounded-lg border border-slate-300 p-2" placeholder="Nombre del canal" />
+            <button id="create-channel" class="rounded-lg bg-slate-900 px-3 py-2 text-white">Crear</button>
+          </div>
+          <input id="creator-name" class="mb-4 w-full rounded-lg border border-slate-300 p-2" placeholder="Tu nombre (si eres anonimo)" />
+          <ul id="channels" class="space-y-2"></ul>
+        </article>
+
+        <article class="rounded-2xl bg-white p-4 shadow-sm md:col-span-2">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 id="current-channel" class="text-lg font-semibold">Selecciona un canal</h2>
+            <div class="flex items-center gap-2">
+              <span id="socket-status" class="text-xs text-slate-500">WebSocket: sin canal seleccionado</span>
+              <button id="connect-socket" class="rounded-md bg-emerald-700 px-2 py-1 text-xs text-white">Conectar</button>
+              <button id="disconnect-socket" class="rounded-md bg-slate-700 px-2 py-1 text-xs text-white">Desconectar</button>
+            </div>
+          </div>
+          <div id="messages" class="h-96 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3"></div>
+          <div class="mt-3 flex gap-2">
+            <input id="nickname" class="w-40 rounded-lg border border-slate-300 p-2" placeholder="Nickname anon" />
+            <input id="message-input" class="w-full rounded-lg border border-slate-300 p-2" placeholder="Escribe un mensaje" />
+            <button id="send-message" class="rounded-lg bg-blue-700 px-4 py-2 text-white">Enviar</button>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script>
+      const channelsEl = document.getElementById('channels');
+      const messagesEl = document.getElementById('messages');
+      const currentChannelEl = document.getElementById('current-channel');
+      const socketStatusEl = document.getElementById('socket-status');
+      const connectSocketBtn = document.getElementById('connect-socket');
+      const disconnectSocketBtn = document.getElementById('disconnect-socket');
+
+      let currentChannelSlug = null;
+      let socket = null;
+      let manualSocketClose = false;
+
+      function setSocketStatus(text, tone = 'neutral') {
+        socketStatusEl.textContent = text;
+        socketStatusEl.classList.remove('text-slate-500', 'text-emerald-700', 'text-amber-700', 'text-rose-700');
+
+        if (tone === 'ok') {
+          socketStatusEl.classList.add('text-emerald-700');
+          return;
+        }
+
+        if (tone === 'warn') {
+          socketStatusEl.classList.add('text-amber-700');
+          return;
+        }
+
+        if (tone === 'error') {
+          socketStatusEl.classList.add('text-rose-700');
+          return;
+        }
+
+        socketStatusEl.classList.add('text-slate-500');
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      function addMessage(msg) {
+        const item = document.createElement('div');
+        item.className = 'mb-2 rounded-md bg-white p-2 text-sm';
+        item.innerHTML = `<strong>${escapeHtml(msg.author_name)}:</strong> ${escapeHtml(msg.content)}`;
+        messagesEl.appendChild(item);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      async function loadChannels() {
+        const response = await fetch('/api/channels/');
+        const data = await response.json();
+        channelsEl.innerHTML = '';
+
+        data.forEach((channel) => {
+          const li = document.createElement('li');
+          li.innerHTML = `<button class="w-full rounded-lg border border-slate-300 p-2 text-left hover:bg-slate-50"># ${escapeHtml(channel.name)}</button>`;
+          li.querySelector('button').onclick = () => selectChannel(channel.slug, channel.name);
+          channelsEl.appendChild(li);
+        });
+      }
+
+      async function loadMessages(slug) {
+        const response = await fetch(`/api/channels/${slug}/messages/`);
+        const data = await response.json();
+        messagesEl.innerHTML = '';
+        data.forEach(addMessage);
+      }
+
+      function connectSocket(slug) {
+        if (!slug) {
+          setSocketStatus('WebSocket: selecciona un canal', 'warn');
+          return;
+        }
+
+        if (socket) {
+          manualSocketClose = true;
+          socket.close();
+        }
+
+        manualSocketClose = false;
+        setSocketStatus('WebSocket: conectando...', 'warn');
+        socket = new WebSocket(`${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/chat/${slug}/`);
+
+        socket.onopen = () => {
+          setSocketStatus('WebSocket: conectado', 'ok');
+        };
+
+        socket.onclose = () => {
+          if (manualSocketClose) {
+            setSocketStatus('WebSocket: desconectado manualmente', 'neutral');
+            return;
+          }
+          setSocketStatus('WebSocket: desconectado (reintenta)', 'error');
+        };
+
+        socket.onerror = () => {
+          setSocketStatus('WebSocket: error de conexion', 'error');
+        };
+
+        socket.onmessage = (event) => {
+          const message = JSON.parse(event.data);
+          addMessage(message);
+        };
+      }
+
+      async function selectChannel(slug, name) {
+        currentChannelSlug = slug;
+        currentChannelEl.textContent = `Canal: #${name}`;
+        await loadMessages(slug);
+        connectSocket(slug);
+      }
+
+      connectSocketBtn.onclick = () => {
+        connectSocket(currentChannelSlug);
+      };
+
+      disconnectSocketBtn.onclick = () => {
+        if (!socket) {
+          setSocketStatus('WebSocket: no hay conexion activa', 'neutral');
+          return;
+        }
+
+        manualSocketClose = true;
+        socket.close();
+      };
+
+      document.getElementById('create-channel').onclick = async () => {
+        const name = document.getElementById('new-channel-name').value.trim();
+        const createdBy = document.getElementById('creator-name').value.trim();
+        if (!name) return;
+
+        const payload = {
+          name,
+          created_by_name: createdBy || 'anon',
+        };
+
+        await fetch('/api/channels/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        document.getElementById('new-channel-name').value = '';
+        await loadChannels();
+      };
+
+      document.getElementById('send-message').onclick = async () => {
+        if (!currentChannelSlug) return;
+        const contentInput = document.getElementById('message-input');
+        const nicknameInput = document.getElementById('nickname');
+
+        const content = contentInput.value.trim();
+        if (!content) return;
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({
+            content,
+            nickname: nicknameInput.value.trim() || 'anon',
+          }));
+        } else {
+          await fetch(`/api/channels/${currentChannelSlug}/messages/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content,
+              nickname: nicknameInput.value.trim() || 'anon',
+            }),
+          });
+          await loadMessages(currentChannelSlug);
+        }
+
+        contentInput.value = '';
+      };
+
+      loadChannels();
+    </script>
+  </body>
+</html>
