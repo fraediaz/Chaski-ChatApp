@@ -164,7 +164,6 @@ Este repo ya incluye [render.yaml](render.yaml) para desplegar con Blueprint.
 4. Espera que se creen:
   - Web service (Django + Daphne)
   - Redis (Channels)
-  - Postgres
 5. Abre la URL del servicio web y prueba `/api/docs/`.
 
 ### Variables importantes
@@ -172,8 +171,15 @@ Este repo ya incluye [render.yaml](render.yaml) para desplegar con Blueprint.
 - `SECRET_KEY`: se genera automáticamente
 - `DEBUG=false`
 - `ALLOWED_HOSTS=.onrender.com`
-- `DATABASE_URL`: enlazada a Postgres de Render
 - `REDIS_URL`: enlazada a Redis de Render
+
+### Base de datos
+
+El deploy queda usando solo SQLite, como pediste.
+
+- Si Render reinicia o redeploya, el archivo SQLite puede perderse porque el filesystem es efímero.
+- Si quieres persistencia real con SQLite en Render, hay que añadir un disk persistente.
+- Para un chat de demo/portafolio, SQLite sirve bien mientras no necesites guardar histórico entre redeploys.
 
 ### Nota sobre WebSockets
 

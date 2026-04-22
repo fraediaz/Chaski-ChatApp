@@ -43,7 +43,15 @@ class ChannelSerializer(serializers.ModelSerializer):
             validated_data['created_by_name'] = request.user.get_username()
 
         if not validated_data.get('slug'):
-            validated_data['slug'] = slugify(validated_data['name'])
+            base_slug = slugify(validated_data['name']) or 'canal'
+            slug_candidate = base_slug
+            index = 2
+
+            while Channel.objects.filter(slug=slug_candidate).exists():
+                slug_candidate = f'{base_slug}-{index}'
+                index += 1
+
+            validated_data['slug'] = slug_candidate
 
         return super().create(validated_data)
 

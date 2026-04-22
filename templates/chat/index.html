@@ -21,6 +21,7 @@
       <section class="grid gap-6 md:grid-cols-3">
         <article class="rounded-2xl bg-white p-4 shadow-sm md:col-span-1">
           <h2 class="mb-3 text-lg font-semibold">Canales</h2>
+          <p id="api-status" class="mb-3 text-xs text-slate-500">Estado API: listo</p>
           <div class="mb-3 flex gap-2">
             <input id="new-channel-name" class="w-full rounded-lg border border-slate-300 p-2" placeholder="Nombre del canal" />
             <button id="create-channel" class="rounded-lg bg-slate-900 px-3 py-2 text-white">Crear</button>
@@ -53,6 +54,7 @@
       const messagesEl = document.getElementById('messages');
       const currentChannelEl = document.getElementById('current-channel');
       const socketStatusEl = document.getElementById('socket-status');
+      const apiStatusEl = document.getElementById('api-status');
       const connectSocketBtn = document.getElementById('connect-socket');
       const disconnectSocketBtn = document.getElementById('disconnect-socket');
 
@@ -88,6 +90,25 @@
         return div.innerHTML;
       }
 
+      function setApiStatus(text, tone = 'neutral') {
+        apiStatusEl.textContent = text;
+        apiStatusEl.classList.remove('text-slate-500', 'text-emerald-700', 'text-amber-700', 'text-rose-700');
+
+        if (tone === 'ok') {
+          apiStatusEl.classList.add('text-emerald-700');
+          return;
+        }
+        if (tone === 'warn') {
+          apiStatusEl.classList.add('text-amber-700');
+          return;
+        }
+        if (tone === 'error') {
+          apiStatusEl.classList.add('text-rose-700');
+          return;
+        }
+        apiStatusEl.classList.add('text-slate-500');
+      }
+
       function addMessage(msg) {
         const item = document.createElement('div');
         item.className = 'mb-2 rounded-md bg-white p-2 text-sm';
@@ -98,7 +119,12 @@
 
       async function loadChannels() {
         const response = await fetch('/api/channels/');
+        if (!response.ok) {
+          setApiStatus(`Estado API: error al cargar canales (${response.status})`, 'error');
+          return;
+        }
         const data = await response.json();
+        setApiStatus('Estado API: canales cargados', 'ok');
         channelsEl.innerHTML = '';
 
         data.forEach((channel) => {
@@ -111,6 +137,10 @@
 
       async function loadMessages(slug) {
         const response = await fetch(`/api/channels/${slug}/messages/`);
+        if (!response.ok) {
+          setApiStatus(`Estado API: error al cargar mensajes (${response.status})`, 'error');
+          return;
+        }
         const data = await response.json();
         messagesEl.innerHTML = '';
         data.forEach(addMessage);
@@ -184,11 +214,24 @@
           created_by_name: createdBy || 'anon',
         };
 
-        await fetch('/api/channels/', {
+        const response = await fetch('/api/channels/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
+
+        if (!response.ok) {
+          let detail = `error ${response.status}`;
+          try {
+            const err = await response.json();
+            detail = JSON.stringify(err);
+          } catch (_) {
+          }
+          setApiStatus(`Estado API: no se pudo crear canal (${detail})`, 'error');
+          return;
+        }
+
+        setApiStatus('Estado API: canal creado', 'ok');
 
         document.getElementById('new-channel-name').value = '';
         await loadChannels();
@@ -207,8 +250,9 @@
             content,
             nickname: nicknameInput.value.trim() || 'anon',
           }));
+          setApiStatus('Estado API: mensaje enviado por WebSocket', 'ok');
         } else {
-          await fetch(`/api/channels/${currentChannelSlug}/messages/`, {
+          const response = await fetch(`/api/channels/${currentChannelSlug}/messages/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -216,6 +260,19 @@
               nickname: nicknameInput.value.trim() || 'anon',
             }),
           });
+
+          if (!response.ok) {
+            let detail = `error ${response.status}`;
+            try {
+              const err = await response.json();
+              detail = JSON.stringify(err);
+            } catch (_) {
+            }
+            setApiStatus(`Estado API: no se pudo enviar mensaje (${detail})`, 'error');
+            return;
+          }
+
+          setApiStatus('Estado API: mensaje enviado por REST', 'ok');
           await loadMessages(currentChannelSlug);
         }
 
