@@ -10,7 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,13 +22,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
+def env_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.lower() in ('1', 'true', 'yes', 'on')
+
+
+def env_list(name, default=''):
+    value = os.getenv(name, default)
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure--u6n#l0cf*y10m8ib7*pvd6lpww!grhbuzgyfl@h9it=)-#@mr'
+SECRET_KEY = os.getenv('SECRET_KEY', 'insecure-dev-key-change-me')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool('DEBUG', default=os.getenv('RENDER') is None)
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', default='127.0.0.1,localhost,.onrender.com')
 
 
 # Application definition
@@ -46,6 +61,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -80,10 +96,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.parse(
+        os.getenv('DATABASE_URL', f'sqlite:///{BASE_DIR / "db.sqlite3"}'),
+        conn_max_age=600,
+        ssl_require=not DEBUG,
+    )
 }
 
 
@@ -122,6 +139,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -143,15 +162,31 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
 }
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    },
-}
+REDIS_URL = os.getenv('REDIS_URL', '').strip()
 
-# Extremely permissive development setup. Do not use in production.
-CORS_ALLOW_ALL_ORIGINS = True
-CSRF_TRUSTED_ORIGINS = [
-    'http://*',
-    'https://*',
-]
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [REDIS_URL],
+            },
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
+
+# Extremely permissive setup for demos. Tighten this in production.
+CORS_ALLOW_ALL_ORIGINS = env_bool('CORS_ALLOW_ALL_ORIGINS', default=True)
+CSRF_TRUSTED_ORIGINS = env_list(
+    'CSRF_TRUSTED_ORIGINS',
+    default='http://127.0.0.1:8000,http://localhost:8000,https://*.onrender.com',
+)
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG

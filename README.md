@@ -152,6 +152,35 @@ python manage.py runserver
 
 ---
 
+## ☁️ Deploy en Render
+
+Este repo ya incluye [render.yaml](render.yaml) para desplegar con Blueprint.
+
+### Pasos
+
+1. Sube el repo a GitHub.
+2. En Render, selecciona `New` → `Blueprint`.
+3. Conecta el repositorio y Render leerá `render.yaml`.
+4. Espera que se creen:
+  - Web service (Django + Daphne)
+  - Redis (Channels)
+  - Postgres
+5. Abre la URL del servicio web y prueba `/api/docs/`.
+
+### Variables importantes
+
+- `SECRET_KEY`: se genera automáticamente
+- `DEBUG=false`
+- `ALLOWED_HOSTS=.onrender.com`
+- `DATABASE_URL`: enlazada a Postgres de Render
+- `REDIS_URL`: enlazada a Redis de Render
+
+### Nota sobre WebSockets
+
+Para producción, Channels usa Redis automáticamente si existe `REDIS_URL`. Si no existe, cae a `InMemoryChannelLayer` (solo útil para desarrollo local).
+
+---
+
 ## 📌 Roadmap
 
 - [ ] Indicador de usuario escribiendo  
