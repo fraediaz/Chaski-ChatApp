@@ -2,20 +2,31 @@
 
 Aplicación de mensajería en tiempo real inspirada en los mensajeros del imperio inca.
 
-Permite crear canales y enviar mensajes instantáneamente utilizando WebSockets, combinando una API REST documentada con comunicación en vivo.
+Permite crear canales y enviar mensajes instantáneamente utilizando WebSockets, demostrando comunicación en tiempo real desde el backend con Django Channels y una API REST documentada.
 
 ---
 
 ## 🚀 Demo
 
-- Home: http://127.0.0.1:8000/
-- Swagger: http://127.0.0.1:8000/api/docs/
-- ReDoc: http://127.0.0.1:8000/api/redoc/
-- Schema OpenAPI: http://127.0.0.1:8000/api/schema/
+- Live demo: https://chaski-chatapp.onrender.com/
+- Swagger: https://chaski-chatapp.onrender.com/api/docs/
+- ReDoc: https://chaski-chatapp.onrender.com/api/redoc/
+- Schema OpenAPI: https://chaski-chatapp.onrender.com/api/schema/
 
 ---
 
 ## 🖼️ Capturas
+
+---
+
+## 🧩 Retos técnicos
+
+- Manejo de conexiones WebSocket concurrentes
+- Integración de Django Channels con Redis
+- Sincronización de mensajes en tiempo real entre múltiples clientes
+- Soporte híbrido de usuarios autenticados y anónimos
+
+---
 
 ![Captura 1 - Chat](screenshots/1.png)
 
